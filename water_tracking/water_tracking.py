@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 from datetime import datetime
 import json
+import threading
+import os
+import requests
 
 @dataclass
 class DrinkingEvent:
@@ -118,15 +121,48 @@ class CalibrationManager:
         print(f"Movement threshold: {self.movement_threshold:.3f}")
         return True
 
+API_URL = "http://localhost:8000"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+
+def _load_token() -> Optional[str]:
+    """Read the auth token saved by the Electron app after login."""
+    if not os.path.exists(CONFIG_PATH):
+        return None
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f).get("token")
+    except Exception:
+        return None
+
+
+def _post_sip(event: "DrinkingEvent", token: str):
+    """Fire-and-forget POST to the API in a background thread."""
+    try:
+        requests.post(
+            f"{API_URL}/sips",
+            json=event.to_dict(),
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=3
+        )
+    except Exception:
+        pass  # API unreachable — local JSON is still saved on exit
+
+
 class WaterConsumptionTracker:
     """Tracks water consumption based on sip detection"""
-    
+
     def __init__(self, ml_per_sip: float = 15.0, sip_delay: float = 1.0):
         self.ml_per_sip = ml_per_sip  # More realistic than cups conversion
         self.sip_delay = sip_delay
         self.total_sips = 0
         self.last_sip_time = 0.0
         self.drinking_events: List[DrinkingEvent] = []
+        self.token: Optional[str] = _load_token()
+        if self.token:
+            print("Logged in — sips will sync to the app.")
+        else:
+            print("No login found. Run the desktop app and log in to sync your data.")
     
     def detect_sip(self, right_wrist_y: float, right_movement: float,
                    left_wrist_y: float, left_movement: float,
@@ -139,9 +175,9 @@ class WaterConsumptionTracker:
             return False
         
         # Detect drinking motion (wrist raised above threshold with significant movement)
-        right_sip = (right_wrist_y < sip_threshold and 
+        right_sip = (right_wrist_y > sip_threshold and
                     abs(right_movement) > movement_threshold)
-        left_sip = (left_wrist_y < sip_threshold and 
+        left_sip = (left_wrist_y > sip_threshold and
                    abs(left_movement) > movement_threshold)
         
         if right_sip or left_sip:
@@ -158,6 +194,13 @@ class WaterConsumptionTracker:
             
             print(f"Sip #{self.total_sips} detected! Total volume: {volume_ml:.1f}ml")
             self.last_sip_time = current_time
+
+            # Sync to backend if logged in
+            if self.token:
+                threading.Thread(
+                    target=_post_sip, args=(event, self.token), daemon=True
+                ).start()
+
             return True
         
         return False

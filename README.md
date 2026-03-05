@@ -1,65 +1,227 @@
-# Advanced Water Tracker
+# Water Tracker
 
-A computer vision-based water consumption tracking system that monitors drinking habits in real-time using pose detection and motion analysis algorithms.
+Look, nobody drinks enough water. We all know it, we just don't do anything about it. You sit down at your desk, get stuck into work, and before you know it it's 5pm and you've had half a glass since breakfast. There are apps that remind you to drink, sure — but they rely on you actually logging it yourself, and nobody does that consistently either.
 
-## Overview
+That's what sparked this project. I wanted to build something that just *watches* — sits in the background, uses your webcam, and automatically detects every time you take a sip. No tapping a button, no logging anything manually. You drink, it counts. Simple.
 
-The Advanced Water Tracker utilizes computer vision techniques to monitor hydration through pose detection algorithms. The system tracks wrist movements to identify drinking motions, providing accurate real-time measurement of water consumption through standard webcam input without requiring specialized hardware.
+The idea is that if this were a proper app, it could run quietly in the background on your laptop or phone, build up a picture of your daily hydration habits over time, and give you genuinely useful nudges — not just "drink water!" every hour, but "hey, you haven't had anything in 3 hours" or "you're only 40% of the way to your goal today." Real data, not guesswork.
 
-## Core Features
+This is the Python prototype that proves the concept works. The computer vision side is done — it detects drinking motions in real time using pose estimation, calibrates to your individual style, and logs every sip with a timestamp. What it doesn't have yet is the app layer: a proper UI, a mobile version, history graphs, notifications. That's the next step, and I've laid out how I'd approach it below.
 
-The system incorporates real-time pose detection for continuous monitoring of user behavior. An intelligent calibration system adapts to individual drinking patterns, ensuring optimal detection accuracy. The application provides accurate volume tracking by converting detected sip events into milliliter measurements and automatically persists drinking events with timestamps for analysis.
+---
 
-Visual feedback mechanisms provide immediate status information, while configurable parameters allow customization of sensitivity settings. Comprehensive session analytics deliver detailed summaries of daily water intake patterns.
+## How It Works
 
-## Technical Architecture
+It uses your webcam and **MediaPipe** (Google's pose detection library) to track your wrist positions frame by frame. When it sees your wrist rise above a calibrated threshold with enough upward movement — the motion you make every time you lift a drink — it registers a sip and adds 15ml to your running total.
 
-The water tracking system operates through a three-phase process combining computer vision, signal processing, and behavioral analysis.
+```
+Webcam → MediaPipe Pose Detection → Wrist Tracking → Motion Analysis → Sip Detection → Volume Log
+```
 
-Pose detection utilizes Google's MediaPipe library to identify human pose landmarks, specifically monitoring wrist positions for both hands while processing video feeds at over 30 frames per second.
+There's a short calibration step at the start so it can learn *your* drinking motion specifically, which keeps false positives low.
 
-Motion analysis algorithms track vertical wrist movements to identify drinking motions. Smoothing algorithms reduce noise while dead zone filtering ignores minor hand tremors that could generate false detections.
+---
 
-The sip detection logic implements a compound framework where events are registered when wrist position exceeds calibrated thresholds while detecting significant upward motion. Temporal filtering enforces minimum delays between consecutive detections to prevent double-counting.
+## Features
 
-## Installation and Configuration
+- **Real-time pose detection** — processes webcam feed at 30+ FPS using MediaPipe
+- **Personal calibration** — adapts to your individual drinking style and environment
+- **Automatic sip detection** — no manual logging required
+- **Volume tracking** — each detected sip adds 15ml to your running total
+- **Noise filtering** — smoothing and dead-zone filtering prevent hand tremors triggering false counts
+- **Live overlay** — status, total volume, and sip count shown directly on the camera feed
+- **Auto-save on exit** — full session log saved to JSON with timestamps
+- **Session summary** — total sips and volume (ml and litres) printed at the end of every session
 
-The application requires Python 3.7 or higher with OpenCV 4.5.0+, MediaPipe 0.8.0+, and NumPy 1.21.0+. Clone the repository, create a virtual environment, and install dependencies using the provided requirements file.
+---
 
-For initial setup, launch the application to initialize the webcam feed, execute calibration by performing drinking motions over ten seconds, then activate tracking mode to begin monitoring.
+## Getting Started
 
-## Operation
+### Requirements
 
-Control commands include calibration initiation, tracking toggle, data reset, help display, and application termination. The visual interface displays real-time status information with operational mode indicators, volume displays in milliliters and liters, and running sip count totals.
+- Python 3.7+
+- A webcam
 
-## Technical Specifications
+### Install
 
-The system operates with configurable parameters including fifteen milliliters per detected sip, ten-frame smoothing windows, 0.01-unit dead zone thresholds, one-second minimum sip intervals, and 0.5 confidence thresholds for pose detection.
+```bash
+# Clone the repo
+git clone https://github.com/your-username/water-tracker.git
+cd water-tracker
 
-Data output generates structured JSON records containing timestamps, cumulative volume measurements, and sequential sip counts. Session summaries provide aggregate statistics including total counts, cumulative volume, and consumption rates.
+# Create a virtual environment
+python -m venv venv
+source venv/bin/activate        # macOS/Linux
+venv\Scripts\activate           # Windows
 
-## System Architecture
+# Install dependencies
+pip install opencv-python mediapipe numpy
+```
 
-The modular architecture includes WaterTrackerApp as the primary controller, WristTracker for pose detection and motion analysis, CalibrationManager for threshold optimization, and WaterConsumptionTracker for sip counting and data persistence.
+### Run
 
-Data processing follows a linear pipeline from camera input through MediaPipe processing, wrist tracking, motion analysis, sip detection, volume calculation, and data storage.
+```bash
+python water_tracking/water_tracking.py
+```
 
-## Configuration
+1. A webcam window opens
+2. Press `c` — do a few natural drinking motions over 10 seconds to calibrate
+3. Press `s` to start tracking
+4. Drink normally — sips are counted automatically
+5. Press `q` or `ESC` to quit — your session is saved
 
-Volume estimation and detection sensitivity can be customized through parameter modification. Calibration duration, smoothing windows, and dead zone thresholds are adjustable for different use cases and environments.
+---
 
-## Applications
+## Controls
 
-The system supports personal health monitoring, workplace wellness programs, medical fluid intake tracking, elderly care hydration monitoring, and research applications including behavioral studies and computer vision algorithm development.
+- `c` — Start 10-second calibration
+- `s` — Toggle tracking on / off
+- `r` — Reset session data
+- `h` — Show help
+- `q` / `ESC` — Quit and save
+
+---
+
+## On-Screen Status
+
+- **Yellow / CALIBRATING...** — calibration is running
+- **Green / TRACKING — 250ml** — actively tracking, current total shown
+- **Red / PAUSED** — tracking is stopped
+
+---
+
+## Output
+
+Session data is saved to `water_tracking_data.json` on exit:
+
+```json
+[
+  {
+    "timestamp": 1709385600.123,
+    "datetime": "2024-03-02T10:00:00.123000",
+    "volume_ml": 15.0,
+    "sip_count": 1
+  },
+  {
+    "timestamp": 1709385720.456,
+    "datetime": "2024-03-02T10:02:00.456000",
+    "volume_ml": 30.0,
+    "sip_count": 2
+  }
+]
+```
+
+---
+
+## Project Structure
+
+```
+water-tracker/
+├── water_tracking/
+│   └── water_tracking.py     # Main application
+├── water_tracking_data.json  # Auto-generated on exit
+└── README.md
+```
+
+### Classes
+
+- **WaterTrackerApp** — main controller, runs the loop and ties everything together
+- **WristTracker** — tracks wrist coordinates, applies smoothing, calculates movement
+- **CalibrationManager** — runs calibration and sets personalised detection thresholds
+- **WaterConsumptionTracker** — detects sips, accumulates volume, saves events
+- **DrinkingEvent** — data class for a single sip event
+
+---
+
+## Turning This Into a Real App
+
+This Python script is the working core of the idea. To turn it into something people could actually download and use day-to-day, here are the two most realistic paths:
+
+---
+
+### Option 1 — React (Web / Desktop App)
+
+**Best for:** A desktop or browser-based version. Quickest way to add a proper UI around the existing Python backend.
+
+Keep the Python as a backend API and build a React frontend on top of it.
+
+```
+React Frontend  ←→  FastAPI (Python)  ←→  water_tracking.py
+```
+
+**Steps:**
+
+1. **Wrap the Python in a REST API** using [FastAPI](https://fastapi.tiangolo.com/)
+
+```python
+# example endpoint
+@app.get("/session/summary")
+def get_summary():
+    return {"total_ml": tracker.get_daily_total(), "sips": tracker.total_sips}
+```
+
+2. **Build a React dashboard** that hits those endpoints — show a daily progress bar, a history chart (Recharts works well for this), and a live sip counter
+
+3. **Package it as a desktop app** with [Electron](https://www.electronjs.org/) so it can run in the system tray and access the webcam natively
+
+**Pros:** Fast to prototype, easy to build nice-looking dashboards, tons of charting libraries available
+
+**Cons:** Webcam + real-time CV in a browser is tricky — Electron makes it easier but adds complexity
+
+---
+
+### Option 2 — Flutter (Mobile / Cross-platform App)
+
+**Best for:** A proper mobile app (iOS and Android) — the more ambitious but more useful end goal.
+
+Run the Python detection logic on a backend server and call it from a Flutter mobile app. Or, longer term, port the detection to TensorFlow Lite and run it on-device.
+
+```
+Flutter App  ←→  Python API (hosted)  ←→  MediaPipe Detection
+```
+
+**Steps:**
+
+1. **Host the Python backend** (e.g. on a cheap VPS or Railway.app)
+2. **Build the Flutter app** — Flutter's `camera` package gives you webcam/phone camera access, you stream frames to your Python API for processing
+3. **Add the app layer** — daily goal, progress ring, history, push notifications ("you haven't had water in 2 hours")
+
+**Pros:** One codebase for iOS, Android, and desktop; great for building a polished consumer-facing product
+
+**Cons:** More work upfront; streaming video frames to an API has latency — you'd eventually want on-device ML
+
+---
+
+### Which Should You Pick?
+
+If you just want something working quickly with a nice UI, **start with React + FastAPI**. The Python backend stays almost as-is, you just layer a frontend over it — lower effort, faster results.
+
+If the goal is a mobile app that people can actually download from the App Store or Google Play, **Flutter is the better long-term bet**. More work upfront, but one codebase covers iOS, Android, and desktop.
+
+Either way, the hard part — the detection engine — is already done.
+
+---
 
 ## Troubleshooting
 
-Common issues include insufficient detection due to poor calibration or lighting, excessive false positives requiring parameter adjustment, camera access problems, and performance optimization through resolution or threshold adjustments.
+**No sips being detected**
+- Re-calibrate (`c`) in the same lighting you'll be tracking in
+- Make sure your upper body is fully visible in the frame
+- Try making your drinking motion more deliberate during calibration
 
-## Future Development
+**Too many false positives**
+- Increase `dead_zone` in `WristTracker` to filter out more minor movements
+- Avoid large arm gestures while tracking is active
 
-Planned enhancements include multi-user support, bottle size detection, mobile integration, machine learning improvements, cloud synchronization, and advanced analytics. Technical improvements will focus on GPU acceleration, background subtraction, and three-dimensional pose estimation.
+**Camera won't open**
+- Make sure no other app is using the webcam
+- Try `cv2.VideoCapture(1)` instead of `(0)` for a secondary camera
 
-## Conclusion
+**Performance feels slow**
+- Add `self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)` after the `VideoCapture` line to reduce resolution
 
-The Advanced Water Tracker provides accurate, non-invasive hydration monitoring through computer vision techniques, suitable for personal, institutional, and research applications while maintaining ease of use across diverse user populations.
+---
+
+## License
+
+MIT
